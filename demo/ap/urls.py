@@ -37,4 +37,5 @@ urlpatterns = [
 
     path('attended/<int:question_id>/', views.CheckAnswer.as_view(), name='attended-list-create'),
 
+    path('result/<int:exam_id>/', views.Result.as_view(), name='result'),
 ]

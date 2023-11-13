@@ -10,7 +10,8 @@ from rest_framework import status
 from datetime import datetime
 from rest_framework import authentication, permissions
 from datetime import timedelta
-
+from rest_framework.permissions import IsAuthenticated
+import json
 
 
 
@@ -181,6 +182,10 @@ class UnattendedExamList(APIView):
 
         try:
             payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+            user_id = payload['id']  # Assuming your payload has a 'user_id' field
+            current_user = User.objects.get(id=user_id)
+            print(current_user)
+            print(user_id)
 
         except jwt.ExpiredSignatureError:
             raise AuthenticationFailed('Unauthenticated....!!')
@@ -210,6 +215,9 @@ class CompletedExamList(APIView):
 
         try:
             payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+            user_id = payload['id']
+            current_user = User.objects.get(id=user_id)
+
 
         except jwt.ExpiredSignatureError:
             raise AuthenticationFailed('Unauthenticated....!!')
@@ -230,12 +238,16 @@ class CompletedExamList(APIView):
 
 class ExamView(APIView):
     def get(self, request, exam_id):
+
         token = request.COOKIES.get('jwt')
         if not token:
             raise AuthenticationFailed('Unauthenticated....!!')
 
         try:
             payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+            user_id = payload['id']  # Assuming your payload has a 'user_id' field
+            current_user = User.objects.get(id=user_id)
+
         except jwt.ExpiredSignatureError:
             raise AuthenticationFailed('Unauthenticated....!!')
 
@@ -250,7 +262,15 @@ class ExamView(APIView):
             start_time = timezone.localtime(exam.start_time) if exam.start_time else None
             end_time = timezone.localtime(exam.end_time) if exam.end_time else None
 
+            # if exam.status != 'Completed':
+            #     # Update the status to 'Completed' for the current user
+            #     exam.status = 'Completed'
+            #     exam.save()
+            # print(f"Exam status after update: {exam.status}")
+
+
             exam_data = {
+                "current_user": current_user.username,
                 "title": exam.title,
                 "start_time": start_time,
                 "end_time": end_time,
@@ -263,6 +283,7 @@ class ExamView(APIView):
             return Response(exam_data)
         except Exam.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
+
 
 class CreateQuestion(APIView):
     def post(self, request):
@@ -281,17 +302,6 @@ class CreateChoices(APIView):
 
 class ListQuestions(APIView):
     def get(self, request, exam_id):
-
-        token = request.COOKIES.get('jwt')
-        print(token)
-        if not token:
-            raise AuthenticationFailed('Unauthenticated....!!')
-
-        try:
-            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
-
-        except jwt.ExpiredSignatureError:
-            raise AuthenticationFailed('Unauthenticated....!!')
 
         # Filter questions related to the specified exam
         questions = Question.objects.filter(exam_id=exam_id)
@@ -324,8 +334,25 @@ class ListQuestions(APIView):
 
 class CheckAnswer(APIView):
     def post(self, request, question_id):
-        serializer = AttendedSerializer(data=request.data)
-        
+
+        token = request.COOKIES.get('jwt')
+        print(token)
+        if not token:
+            raise AuthenticationFailed('Unauthenticated....!!')
+
+        try:
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Unauthenticated....!!')
+
+        user = User.objects.get(id=payload["id"])
+
+        mutable_data = request.data.copy()
+        mutable_data['user'] = user.id
+
+        serializer = AttendedSerializer(data=mutable_data)
+
         if serializer.is_valid():
             try:
                 question = Question.objects.get(id=question_id)
@@ -333,8 +360,6 @@ class CheckAnswer(APIView):
             except Question.DoesNotExist:
                 return Response({"error": "Question not found"}, status=status.HTTP_404_NOT_FOUND)
 
-            exam = serializer.validated_data['exam']
-            print(exam)
             choices = serializer.validated_data['choices']
             print(choices)
 
@@ -343,17 +368,31 @@ class CheckAnswer(APIView):
             # Check if the question and choices are associated
             if question != choices.question:
                 return Response({"error": "Question and choices do not match"}, status=status.HTTP_400_BAD_REQUEST)
-
+            demo = choices.question
+            print(demo)
             serializer.validated_data['is_correct'] = is_correct
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
 class AttendedAnswer(APIView):
     
     def get(self, request, exam_id):
+
+        token = request.COOKIES.get('jwt')
+        print(token)
+        if not token:
+            raise AuthenticationFailed('Unauthenticated....!!')
+
+        try:
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Unauthenticated....!!')
+
+        user = User.objects.get(id=payload["id"])
+
+        print(user)
         exam = Exam.objects.get(pk=exam_id)
 
         duration_str = "Not applicable"
@@ -391,22 +430,28 @@ class AttendedAnswer(APIView):
             question_data['choices'] = choices_data
 
             # Check if any choice for this question is marked as correct
-            has_correct_choice = any(choice['is_correct'] for choice in choices_data)
+            # has_correct_choice = any(choice['is_correct'] for choice in choices_data)
             
-            try:
-                attended_question = Attended.objects.get(exam=exam, question=question)
+            attended_questions = Attended.objects.filter(exam=exam, question=question, user=user)
+
+            if attended_questions.exists():
+                # Handle the case when there is at least one attended question
+                attended_question = attended_questions.first()  # You may want to define a logic to choose one if there are multiple
                 if attended_question.is_correct:
                     correct_answers_count += 1
                 else:
                     wrong_answers_count += 1
-            except Attended.DoesNotExist:
+            else:
+                # Handle the case when no attended question is found
                 unattended_questions_count += 1
+
 
             data.append(question_data)
         
         question_count = len(data)
         
         response_data = {
+
             "duration": str(duration),
             "Time_Remaining" : duration_str,
             "Total_Count": question_count,
@@ -417,6 +462,75 @@ class AttendedAnswer(APIView):
             "questions": data,
         }
         return Response(response_data)
+
+
+
+class Result(APIView):
+
+    def get(self, request, exam_id):
+
+        token = request.COOKIES.get('jwt')
+        print(token)
+        if not token:
+            raise AuthenticationFailed('Unauthenticated....!!')
+
+        try:
+            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
+
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Unauthenticated....!!')
+
+        user = User.objects.get(id=payload["id"])
+
+        exam = Exam.objects.get(pk=exam_id)
+        exam.start_time = timezone.localtime(exam.start_time) if exam.start_time else None
+        exam.end_time = timezone.localtime(exam.end_time) if exam.end_time else None
+
+        exam_data = {
+            "mark_per_question": exam.mark_per_question,
+            "negative_mark": exam.negative_mark,
+            "Total_Mark" : exam.total_mark,
+            "Started" : exam.start_time,
+            "Ended" : exam.end_time
+        }
+
+        correct_answers_count = 0
+        wrong_answers_count = 0
+        unattended_questions_count = 0
+
+        questions = Question.objects.filter(exam_id=exam_id)
+
+        for question in questions:
+            choices_data = [ChoiceSerializer(choice).data for choice in question.choices.all()]
+
+            attended_questions = Attended.objects.filter(exam=exam, question=question, user=user)
+
+            if attended_questions.exists():
+                # Handle the case when there is at least one attended question
+                attended_question = attended_questions.first()  # You may want to define a logic to choose one if there are multiple
+                if attended_question.is_correct:
+                    correct_answers_count += 1
+                else:
+                    wrong_answers_count += 1
+            else:
+                # Handle the case when no attended question is found
+                unattended_questions_count += 1
+
+        question_count = len(questions)
+
+        your_score = (correct_answers_count * exam.mark_per_question) + (wrong_answers_count * exam.negative_mark)
+
+        response_data = {            
+            "username": user.username,
+            "exam_data" : exam_data,
+            "Correct_count": correct_answers_count,
+            "Wrong_count": wrong_answers_count,
+            "Unattended_count": unattended_questions_count,
+            "Total_count": question_count,
+            "Your_Score" : your_score,
+        }
+        return Response(response_data)
+
 
 
 # class ExamList(APIView):

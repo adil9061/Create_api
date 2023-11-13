@@ -45,6 +45,7 @@ class Exam(models.Model):
     negative_mark = models.IntegerField()
     total_mark = models.IntegerField()
     status = models.CharField(max_length=20, default='Unattended')
+    completed_by = models.ManyToManyField(User, related_name='completed_exams', blank=True)
 
     def __str__(self):
         return self.title
@@ -67,6 +68,7 @@ class Choice(models.Model):
 
     
 class Attended(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     exam = models.ForeignKey(Exam, on_delete=models.CASCADE)
     question = models.ForeignKey(Question, on_delete=models.CASCADE)
     choices = models.ForeignKey(Choice, on_delete=models.CASCADE)
