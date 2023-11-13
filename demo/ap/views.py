@@ -182,7 +182,7 @@ class UnattendedExamList(APIView):
 
         try:
             payload = jwt.decode(token, 'secret', algorithms=['HS256'])
-            user_id = payload['id']  # Assuming your payload has a 'user_id' field
+            user_id = payload['id']
             current_user = User.objects.get(id=user_id)
             print(current_user)
             print(user_id)
@@ -245,7 +245,7 @@ class ExamView(APIView):
 
         try:
             payload = jwt.decode(token, 'secret', algorithms=['HS256'])
-            user_id = payload['id']  # Assuming your payload has a 'user_id' field
+            user_id = payload['id']
             current_user = User.objects.get(id=user_id)
 
         except jwt.ExpiredSignatureError:
@@ -400,10 +400,9 @@ class AttendedAnswer(APIView):
             remaining_time = exam.end_time - current_time
 
             if current_time >= exam.start_time and remaining_time.total_seconds() > 0:
-                # Convert remaining_time to a timedelta object
+
                 remaining_time = timedelta(seconds=remaining_time.total_seconds())
 
-                # Extract hours, minutes, and seconds from the timedelta
                 hours, remainder = divmod(remaining_time.seconds, 3600)
                 minutes, seconds = divmod(remainder, 60)
 
@@ -417,7 +416,7 @@ class AttendedAnswer(APIView):
         duration = exam.end_time - exam.start_time
 
         questions = Question.objects.filter(exam_id=exam_id)
-        data = []  # Initialize the data list here
+        data = []
 
         correct_answers_count = 0
         wrong_answers_count = 0
@@ -428,20 +427,19 @@ class AttendedAnswer(APIView):
             choices_data = [ChoiceSerializer(choice).data for choice in question.choices.all()]
             question_data['choices'] = choices_data
 
-            # Check if any choice for this question is marked as correct
             # has_correct_choice = any(choice['is_correct'] for choice in choices_data)
             
             attended_questions = Attended.objects.filter(exam=exam, question=question, user=user)
 
             if attended_questions.exists():
-                # Handle the case when there is at least one attended question
-                attended_question = attended_questions.first()  # You may want to define a logic to choose one if there are multiple
+
+                attended_question = attended_questions.first()
                 if attended_question.is_correct:
                     correct_answers_count += 1
                 else:
                     wrong_answers_count += 1
             else:
-                # Handle the case when no attended question is found
+
                 unattended_questions_count += 1
 
 
@@ -506,14 +504,12 @@ class Result(APIView):
             attended_questions = Attended.objects.filter(exam=exam, question=question, user=user)
 
             if attended_questions.exists():
-                # Handle the case when there is at least one attended question
-                attended_question = attended_questions.first()  # You may want to define a logic to choose one if there are multiple
+                attended_question = attended_questions.first()
                 if attended_question.is_correct:
                     correct_answers_count += 1
                 else:
                     wrong_answers_count += 1
             else:
-                # Handle the case when no attended question is found
                 unattended_questions_count += 1
 
         question_count = len(questions)
