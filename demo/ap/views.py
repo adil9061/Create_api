@@ -223,7 +223,7 @@ class CompletedExamList(APIView):
             raise AuthenticationFailed('Unauthenticated....!!')
 
         current_time = timezone.now()
-        completed_exams = Exam.objects.filter(end_time__lt=current_time)
+        completed_exams = Exam.objects.filter(end_time__lt=current_time, status='Completed')
 
         for exam in completed_exams:
             exam.status = 'Completed'
@@ -314,10 +314,9 @@ class ListQuestions(APIView):
             remaining_time = exam.end_time - current_time
 
             if current_time >= exam.start_time and remaining_time.total_seconds() > 0:
-                # Convert remaining_time to a timedelta object
+
                 remaining_time = timedelta(seconds=remaining_time.total_seconds())
 
-                # Extract hours, minutes, and seconds from the timedelta
                 hours, remainder = divmod(remaining_time.seconds, 3600)
                 minutes, seconds = divmod(remainder, 60)
 
@@ -486,6 +485,7 @@ class Result(APIView):
         exam.start_time = timezone.localtime(exam.start_time) if exam.start_time else None
         exam.end_time = timezone.localtime(exam.end_time) if exam.end_time else None
 
+
         exam_data = {
             "mark_per_question": exam.mark_per_question,
             "negative_mark": exam.negative_mark,
@@ -519,6 +519,9 @@ class Result(APIView):
         question_count = len(questions)
 
         your_score = (correct_answers_count * exam.mark_per_question) + (wrong_answers_count * exam.negative_mark)
+
+        exam.status = 'Completed'
+        exam.save()
 
         response_data = {            
             "username": user.username,
