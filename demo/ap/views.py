@@ -14,7 +14,7 @@ from rest_framework.permissions import IsAuthenticated
 import json
 
 
-
+ 
 # Create your views here.
 
 # For registration
